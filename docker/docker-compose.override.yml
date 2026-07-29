@@ -1,0 +1,65 @@
+# Copied into vendor/azerothcore-wotlk/docker-compose.override.yml by bootstrap.sh
+# Extends the Playerbots AzerothCore compose stack with modules + Ollama chat.
+
+services:
+  ac-worldserver:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Playerbots — conservative defaults for ~16 GB RAM hosts
+      AC_AI_PLAYERBOT_ENABLED: "1"
+      AC_AI_PLAYERBOT_ENABLE_BROADCASTS: "0"
+      AC_AI_PLAYERBOT_RANDOM_BOT_AUTOLOGIN: "1"
+      AC_AI_PLAYERBOT_MIN_RANDOM_BOTS: "${AC_AI_PLAYERBOT_MIN_RANDOM_BOTS:-20}"
+      AC_AI_PLAYERBOT_MAX_RANDOM_BOTS: "${AC_AI_PLAYERBOT_MAX_RANDOM_BOTS:-50}"
+      # Map update threads (worldserver.conf via env)
+      AC_MAP_UPDATE_THREADS: "${AC_MAP_UPDATE_THREADS:-4}"
+      # mod-ollama-chat
+      AC_OLLAMA_CHAT_ENABLE: "1"
+      AC_OLLAMA_CHAT_DEBUG_ENABLED: "${AC_OLLAMA_CHAT_DEBUG_ENABLED:-0}"
+      AC_OLLAMA_CHAT_MODEL: "${AC_OLLAMA_CHAT_MODEL:-qwen2.5:3b}"
+      # Default: in-compose Ollama. For host Ollama (e.g. macOS Metal), set:
+      #   AC_OLLAMA_CHAT_URL=http://host.docker.internal:11434/api/generate
+      AC_OLLAMA_CHAT_URL: "${AC_OLLAMA_CHAT_URL:-http://ac-ollama:11434/api/generate}"
+    volumes:
+      - ./modules:/azerothcore/modules:ro
+    # Override replaces depends_on entirely — keep upstream deps and add Ollama.
+    depends_on:
+      ac-database:
+        condition: service_healthy
+      ac-db-import:
+        condition: service_completed_successfully
+      ac-client-data-init:
+        condition: service_completed_successfully
+      ac-ollama:
+        condition: service_started
+
+  ac-db-import:
+    volumes:
+      - ./modules:/azerothcore/modules:ro
+
+  ac-ollama:
+    image: ollama/ollama:latest
+    container_name: ac-ollama
+    restart: unless-stopped
+    networks:
+      - ac-network
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "${DOCKER_OLLAMA_EXTERNAL_PORT:-11434}:11434"
+    # Optional NVIDIA GPU (Linux + NVIDIA Container Toolkit).
+    # Uncomment the block below if you have a working NVIDIA Docker setup.
+    # On macOS Docker Desktop this is unavailable; use host Ollama + Metal instead
+    # (see README) and set AC_OLLAMA_CHAT_URL to host.docker.internal.
+    #
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  ollama:

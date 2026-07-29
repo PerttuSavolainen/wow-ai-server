@@ -1,0 +1,21 @@
+# Upstream clone + local runtime (not committed)
+/vendor/
+/data/
+
+# Secrets and local env
+.env
+**/.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# Archives / downloads
+*.zip
+*.tar
+*.tar.gz
+*.7z
