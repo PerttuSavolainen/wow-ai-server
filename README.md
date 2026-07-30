@@ -148,7 +148,7 @@ NO_CACHE=1 ./scripts/up.sh
 
 | Script | Purpose |
 |--------|---------|
-| [`scripts/bootstrap.sh`](scripts/bootstrap.sh) | Clone fork + modules, patch Dockerfile, stage SQL, install override + `.env` |
+| [`scripts/bootstrap.sh`](scripts/bootstrap.sh) | Clone fork + modules, patch Dockerfile, install override + `.env` |
 | [`scripts/pull-client-data.sh`](scripts/pull-client-data.sh) | Download/extract wowgaming `Data.zip`, bind-mount via `DOCKER_VOL_DATA` |
 | [`scripts/up.sh`](scripts/up.sh) | `docker compose up -d --build`, optional model pull |
 | [`scripts/down.sh`](scripts/down.sh) | `docker compose down` |
@@ -163,9 +163,11 @@ docker compose logs -f ac-ollama
 docker exec ac-worldserver bash -lc 'curl -sS -m 3 http://ac-ollama:11434/api/tags'
 ```
 
-- **Unknown database `acore_playerbots` / missing bot tables:** re-run bootstrap (SQL staging) and rebuild so `ac-db-import` picks up module SQL; check worldserver logs on first boot.
+- **Unknown database `acore_playerbots` / missing bot tables:** rebuild/re-run `ac-db-import` so module SQL under `modules/mod-playerbots` is applied; check worldserver logs on first boot.
+- **`Duplicate filename ... playerbots_*.sql`:** do not copy module SQL into `data/sql/custom/` — db-import already loads modules and requires unique basenames. Remove those copies, rebuild `ac-db-import`, re-run import.
 - **Bots online but silent:** confirm model is pulled, `AC_OLLAMA_CHAT_URL` is reachable from `ac-worldserver`, and `AC_OLLAMA_CHAT_ENABLE=1`.
-- **Permission errors on etc/logs:** set `DOCKER_USER_ID` / `DOCKER_GROUP_ID` in `.env` to your host uid/gid and recreate containers.
+- **Permission errors on etc/logs:** on Linux, set `DOCKER_USER_ID` / `DOCKER_GROUP_ID` in `.env` to your host uid/gid (both ≥ 1000) and recreate containers. On macOS keep `1000:1000`.
+- **`The GID '20' is already in use` (macOS build):** your `.env` mapped host `staff` (gid 20). Set `DOCKER_USER_ID=1000` and `DOCKER_GROUP_ID=1000` in `vendor/azerothcore-wotlk/.env`, then re-run `./scripts/up.sh`.
 - **Out of memory:** lower `AC_AI_PLAYERBOT_MAX_RANDOM_BOTS` and use a smaller model.
 
 ## Non-goals (v1)

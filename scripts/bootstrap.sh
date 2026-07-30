@@ -102,53 +102,53 @@ patch_dockerfile() {
 
 patch_dockerfile
 
-stage_sql() {
-  local src_chars="${MODULES_DIR}/mod-playerbots/data/sql/characters/base"
-  local src_world="${MODULES_DIR}/mod-playerbots/data/sql/world/base"
-  local dst_chars="${AC_DIR}/data/sql/custom/db_characters"
-  local dst_world="${AC_DIR}/data/sql/custom/db_world"
-
-  mkdir -p "${dst_chars}" "${dst_world}"
-
-  shopt -s nullglob
-  local char_sql=( "${src_chars}"/*.sql )
-  local world_sql=( "${src_world}"/*.sql )
-  shopt -u nullglob
-
-  if ((${#char_sql[@]})); then
-    log "Staging playerbots characters SQL into data/sql/custom/db_characters/"
-    cp -n "${char_sql[@]}" "${dst_chars}/" 2>/dev/null || true
-  else
-    log "No characters base SQL files to stage (ok)"
-  fi
-
-  if ((${#world_sql[@]})); then
-    log "Staging playerbots world SQL into data/sql/custom/db_world/"
-    cp -n "${world_sql[@]}" "${dst_world}/" 2>/dev/null || true
-  else
-    log "No world base SQL files to stage (ok)"
-  fi
-}
-
-stage_sql
+# Do NOT copy module SQL into data/sql/custom/ — db-import already loads
+# modules/mod-playerbots/data/sql/* and rejects duplicate basenames.
+mkdir -p \
+  "${AC_DIR}/data/sql/custom/db_auth" \
+  "${AC_DIR}/data/sql/custom/db_characters" \
+  "${AC_DIR}/data/sql/custom/db_world"
 
 log "Installing docker-compose.override.yml"
 cp "${ROOT_DIR}/docker/docker-compose.override.yml" "${AC_DIR}/docker-compose.override.yml"
 
+# Pick container UID/GID that do not collide with Ubuntu system accounts.
+# macOS users are often uid 501 / gid 20 (staff); GID 20 is already "dialout" in Ubuntu,
+# which makes Dockerfile `addgroup --gid 20` fail during image build.
+resolve_docker_ids() {
+  local uid gid
+  uid="$(id -u)"
+  gid="$(id -g)"
+  if [[ "$(uname -s)" == "Darwin" ]] || (( uid < 1000 )); then
+    uid=1000
+  fi
+  if [[ "$(uname -s)" == "Darwin" ]] || (( gid < 1000 )); then
+    gid=1000
+  fi
+  printf '%s %s' "${uid}" "${gid}"
+}
+
 if [[ ! -f "${AC_DIR}/.env" ]]; then
   log "Creating .env from docker/.env.example"
   cp "${ROOT_DIR}/docker/.env.example" "${AC_DIR}/.env"
-  if id -u >/dev/null 2>&1; then
-    sed -i.bak \
-      -e "s/^DOCKER_USER_ID=.*/DOCKER_USER_ID=$(id -u)/" \
-      -e "s/^DOCKER_GROUP_ID=.*/DOCKER_GROUP_ID=$(id -g)/" \
-      "${AC_DIR}/.env" && rm -f "${AC_DIR}/.env.bak"
-  fi
+  read -r _docker_uid _docker_gid < <(resolve_docker_ids)
+  sed -i.bak \
+    -e "s/^DOCKER_USER_ID=.*/DOCKER_USER_ID=${_docker_uid}/" \
+    -e "s/^DOCKER_GROUP_ID=.*/DOCKER_GROUP_ID=${_docker_gid}/" \
+    "${AC_DIR}/.env" && rm -f "${AC_DIR}/.env.bak"
+  log "Set DOCKER_USER_ID=${_docker_uid} DOCKER_GROUP_ID=${_docker_gid}"
 else
   log ".env already exists — leaving it unchanged"
+  # Warn if existing .env would break the Ubuntu image build (common on macOS).
+  _existing_gid="$(grep -E '^DOCKER_GROUP_ID=' "${AC_DIR}/.env" | cut -d= -f2- || true)"
+  if [[ -n "${_existing_gid}" ]] && (( _existing_gid < 1000 )); then
+    log "WARNING: DOCKER_GROUP_ID=${_existing_gid} may collide with Ubuntu system groups."
+    log "         Set DOCKER_GROUP_ID=1000 (and usually DOCKER_USER_ID=1000) in ${AC_DIR}/.env"
+  fi
 fi
 
-# Ensure custom SQL dirs exist even if empty (git keeps them via .gitkeep upstream sometimes)
+# Ensure custom SQL dirs exist even if empty (do not copy module SQL here —
+# that duplicates filenames and makes ac-db-import fail).
 mkdir -p \
   "${AC_DIR}/data/sql/custom/db_auth" \
   "${AC_DIR}/data/sql/custom/db_characters" \
