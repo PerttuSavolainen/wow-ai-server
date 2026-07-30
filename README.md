@@ -54,6 +54,15 @@ Point your client `realmlist.wtf` at this host:
 set realmlist 127.0.0.1
 ```
 
+If the client runs in a **VM**, on another PC, or still bounces back to the realm list after "Okay", the auth DB must advertise your LAN IP (not `127.0.0.1`) for the worldserver:
+
+```bash
+./scripts/set-realm-address.sh          # auto-detect
+# or: ./scripts/set-realm-address.sh 192.168.0.82
+```
+
+Then use the same IP in `realmlist.wtf`, restart the client, and try again.
+
 Stop the stack:
 
 ```bash
@@ -151,7 +160,7 @@ NO_CACHE=1 ./scripts/up.sh
 | [`scripts/bootstrap.sh`](scripts/bootstrap.sh) | Clone fork + modules, patch Dockerfile, install override + `.env` |
 | [`scripts/pull-client-data.sh`](scripts/pull-client-data.sh) | Download/extract wowgaming `Data.zip`, bind-mount via `DOCKER_VOL_DATA` |
 | [`scripts/up.sh`](scripts/up.sh) | `docker compose up -d --build`, optional model pull |
-| [`scripts/down.sh`](scripts/down.sh) | `docker compose down` |
+| [`scripts/set-realm-address.sh`](scripts/set-realm-address.sh) | Set `realmlist.address` to a LAN IP (fixes realm-list bounce) |
 
 ## Troubleshooting
 
@@ -163,6 +172,8 @@ docker compose logs -f ac-ollama
 docker exec ac-worldserver bash -lc 'curl -sS -m 3 http://ac-ollama:11434/api/tags'
 ```
 
+- **Realm list loops after Okay (“Logging into game server” then back):** `realmlist.address` is probably `127.0.0.1` while the client is not on the Docker host’s localhost (VM / other PC). Run `./scripts/set-realm-address.sh` and put that IP in `realmlist.wtf`.
+- **Realm shows Offline:** worldserver was down or the realm `flag` still has the offline bit after a restart. Ensure `ac-worldserver` is running, then `./scripts/set-realm-address.sh` (clears offline + restarts auth/world) or wait until world finishes loading bots.
 - **Unknown database `acore_playerbots` / missing bot tables:** rebuild/re-run `ac-db-import` so module SQL under `modules/mod-playerbots` is applied; check worldserver logs on first boot.
 - **`Duplicate filename ... playerbots_*.sql`:** do not copy module SQL into `data/sql/custom/` — db-import already loads modules and requires unique basenames. Remove those copies, rebuild `ac-db-import`, re-run import.
 - **Bots online but silent:** confirm model is pulled, `AC_OLLAMA_CHAT_URL` is reachable from `ac-worldserver`, and `AC_OLLAMA_CHAT_ENABLE=1`.
