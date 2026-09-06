@@ -7,8 +7,9 @@ AC_DIR="${ROOT_DIR}/vendor/azerothcore-wotlk"
 DATA_DIR="${AC_DIR}/env/dist/data"
 CACHE_DIR="${ROOT_DIR}/data/cache"
 
-# Pin a known-good release; override with CLIENT_DATA_TAG=v19 etc.
-CLIENT_DATA_TAG="${CLIENT_DATA_TAG:-v20.0}"
+# Pin to mmap generator version matching this AC/Playerbots build (MMAP_VERSION 19).
+# Override with CLIENT_DATA_TAG=v20.0 only if the core expects MMAP_VERSION 20.
+CLIENT_DATA_TAG="${CLIENT_DATA_TAG:-v19}"
 CLIENT_DATA_URL="${CLIENT_DATA_URL:-https://github.com/wowgaming/client-data/releases/download/${CLIENT_DATA_TAG}/Data.zip}"
 
 log() { printf '==> %s\n' "$*"; }

@@ -1,8 +1,15 @@
 # Copied into vendor/azerothcore-wotlk/docker-compose.override.yml by bootstrap.sh
 # Extends the Playerbots AzerothCore compose stack with modules + Ollama chat.
 
+# Rootless Podman maps host uid 1000 → container root, so bind mounts look
+# root-owned while services run as acore (1000) and cannot write. keep-id
+# aligns container uid with the host user. Harmless under Docker Engine.
+x-ac-userns: &ac-userns
+  userns_mode: keep-id
+
 services:
   ac-worldserver:
+    <<: *ac-userns
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -12,6 +19,14 @@ services:
       AC_AI_PLAYERBOT_RANDOM_BOT_AUTOLOGIN: "1"
       AC_AI_PLAYERBOT_MIN_RANDOM_BOTS: "${AC_AI_PLAYERBOT_MIN_RANDOM_BOTS:-20}"
       AC_AI_PLAYERBOT_MAX_RANDOM_BOTS: "${AC_AI_PLAYERBOT_MAX_RANDOM_BOTS:-50}"
+      # Alliance-only random bots (PVE-friendly)
+      AC_AI_PLAYERBOT_RANDOM_BOT_ALLIANCE_RATIO: "${AC_AI_PLAYERBOT_RANDOM_BOT_ALLIANCE_RATIO:-100}"
+      AC_AI_PLAYERBOT_RANDOM_BOT_HORDE_RATIO: "${AC_AI_PLAYERBOT_RANDOM_BOT_HORDE_RATIO:-0}"
+      # Cap bot max level to highest online player + 3 (see SyncLevelWithPlayers)
+      AC_AI_PLAYERBOT_SYNC_LEVEL_WITH_PLAYERS: "${AC_AI_PLAYERBOT_SYNC_LEVEL_WITH_PLAYERS:-1}"
+      AC_AI_PLAYERBOT_RANDOM_BOT_MIN_LEVEL: "${AC_AI_PLAYERBOT_RANDOM_BOT_MIN_LEVEL:-50}"
+      AC_AI_PLAYERBOT_RANDOM_BOT_MAX_LEVEL: "${AC_AI_PLAYERBOT_RANDOM_BOT_MAX_LEVEL:-80}"
+      AC_AI_PLAYERBOT_DISABLE_DEATH_KNIGHT_LOGIN: "${AC_AI_PLAYERBOT_DISABLE_DEATH_KNIGHT_LOGIN:-1}"
       # Map update threads (worldserver.conf via env)
       AC_MAP_UPDATE_THREADS: "${AC_MAP_UPDATE_THREADS:-4}"
       # mod-ollama-chat
@@ -34,9 +49,19 @@ services:
       ac-ollama:
         condition: service_started
 
+  ac-authserver:
+    <<: *ac-userns
+
   ac-db-import:
+    <<: *ac-userns
+    environment:
+      # Required so db-import creates/updates acore_playerbots (Playerbots fork build).
+      AC_PLAYERBOTS_DATABASE_INFO: "ac-database;3306;root;${DOCKER_DB_ROOT_PASSWORD:-changeme};acore_playerbots"
     volumes:
       - ./modules:/azerothcore/modules:ro
+
+  ac-client-data-init:
+    <<: *ac-userns
 
   ac-ollama:
     image: ollama/ollama:latest

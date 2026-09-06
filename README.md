@@ -92,6 +92,9 @@ Important variables:
 | `DOCKER_DB_ROOT_PASSWORD` | `changeme` | MySQL root password |
 | `AC_AI_PLAYERBOT_MIN_RANDOM_BOTS` | `20` | Minimum random bots |
 | `AC_AI_PLAYERBOT_MAX_RANDOM_BOTS` | `50` | Maximum random bots |
+| `AC_AI_PLAYERBOT_RANDOM_BOT_ALLIANCE_RATIO` | `100` | % Alliance random bots |
+| `AC_AI_PLAYERBOT_RANDOM_BOT_HORDE_RATIO` | `0` | % Horde random bots |
+| `AC_AI_PLAYERBOT_SYNC_LEVEL_WITH_PLAYERS` | `1` | Cap bot max level to highest online player + 3 |
 | `AC_MAP_UPDATE_THREADS` | `4` | World map update threads |
 | `AC_OLLAMA_CHAT_MODEL` | `qwen2.5:3b` | Ollama model name |
 | `AC_OLLAMA_CHAT_URL` | `http://ac-ollama:11434/api/generate` | Ollama generate API |
@@ -177,7 +180,11 @@ docker exec ac-worldserver bash -lc 'curl -sS -m 3 http://ac-ollama:11434/api/ta
 - **Unknown database `acore_playerbots` / missing bot tables:** rebuild/re-run `ac-db-import` so module SQL under `modules/mod-playerbots` is applied; check worldserver logs on first boot.
 - **`Duplicate filename ... playerbots_*.sql`:** do not copy module SQL into `data/sql/custom/` — db-import already loads modules and requires unique basenames. Remove those copies, rebuild `ac-db-import`, re-run import.
 - **Bots online but silent:** confirm model is pulled, `AC_OLLAMA_CHAT_URL` is reachable from `ac-worldserver`, and `AC_OLLAMA_CHAT_ENABLE=1`.
-- **Permission errors on etc/logs:** on Linux, set `DOCKER_USER_ID` / `DOCKER_GROUP_ID` in `.env` to your host uid/gid (both ≥ 1000) and recreate containers. On macOS keep `1000:1000`.
+- **Permission errors on etc/logs:** on Linux Docker Engine, set `DOCKER_USER_ID` / `DOCKER_GROUP_ID` in `.env` to your host uid/gid (both ≥ 1000) and recreate containers. On macOS keep `1000:1000`.
+- **Rootless Podman permission denied on etc/logs/data:** host uid maps to container root, so `acore` cannot write bind mounts. This repo’s override sets `userns_mode: keep-id` for AC services. Prefer `./scripts/up.sh` (handles Podman startup quirks) over bare `docker compose up -d`.
+- **Podman: `ac-authserver` / `ac-worldserver` stuck in Created / `--requires` errors:** known podman-compose nested-dependency bug. Use `./scripts/up.sh`, which starts auth/world without `--requires` after db-import succeeds.
+- **Podman starts `ac-dev-server` and steals ports 3724/8085/7878:** podman-compose ignores Compose profiles. `./scripts/up.sh` starts only the production services; stop extras with `docker rm -f azerothcore-wotlk_ac-dev-server_1`.
+- **`DOCKER_USER=root` did nothing:** that build arg only applies on image rebuild. Runtime user comes from the existing image (`acore`) unless you rebuild or use `userns_mode: keep-id` / a compose `user:` override.
 - **`The GID '20' is already in use` (macOS build):** your `.env` mapped host `staff` (gid 20). Set `DOCKER_USER_ID=1000` and `DOCKER_GROUP_ID=1000` in `vendor/azerothcore-wotlk/.env`, then re-run `./scripts/up.sh`.
 - **Out of memory:** lower `AC_AI_PLAYERBOT_MAX_RANDOM_BOTS` and use a smaller model.
 
